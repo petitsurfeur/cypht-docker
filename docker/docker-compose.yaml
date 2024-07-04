@@ -3,30 +3,70 @@
 
 services:
   db:
+    container_name: mysql_cypht
     image: mariadb:10
+    restart: always
+    
+    networks:
+      - proxy
+
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
-      - ./data/mysql:/var/lib/mysql
+      - ${CONTAINER_DATA_DIR}:/var/lib/mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root_password
       - MYSQL_DATABASE=cypht
-      - MYSQL_USER=cypht
-      - MYSQL_PASSWORD=cypht_password
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+
+
   cypht:
+    container_name: cypht
     image: cypht/cypht:2.1.0
+    domainname: ${DOMAIN_NAME}
+    restart: always
+
+    networks:
+      - proxy
+
     ports:
-      - "80:80"
+      - "83:80"
     # env_file:
     #  - /etc/cypht-prod.env
     environment:
-      - AUTH_USERNAME=admin
-      - AUTH_PASSWORD=admin
+      - AUTH_USERNAME=${AUTH_PASSWORD}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
       - DB_CONNECTION_TYPE=host
       - DB_DRIVER=mysql
       - DB_HOST=db
       - DB_NAME=cypht
-      - DB_USER=cypht
-      - DB_PASS=cypht_password
+      - DB_USER=${MYSQL_USER}
+      - DB_PASS=${MYSQL_PASSWORD}
       - SESSION_TYPE=DB
       - USER_CONFIG_TYPE=DB
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      - "traefik.http.routers.cypht.entrypoints=web"
+      - "traefik.http.routers.cypht.rule=Host(`${DOMAIN_NAME}`)"
+      - "traefik.http.routers.cypht.middlewares=secureHeaders@file"
+
+
+
+        ## HTTP Routers
+      - "traefik.http.routers.cypht-secure.entrypoints=websecure"
+      - "traefik.http.routers.cypht-secure.rule=Host(`$DOMAIN_NAME`)"
+      - "traefik.http.routers.cypht-secure.service=cypht"
+      - "traefik.http.routers.cypht-secure.tls.certresolver=letsencrypt"
+      ## Middlewares
+      #- "traefik.http.middlewares=secureHeaders@file"
+      ## HTTP Services
+      - "traefik.http.services.cypht.loadbalancer.server.port=80"
+
+networks:
+  proxy:
+    name: proxy
+    external: true
